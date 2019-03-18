@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+
+import glob
+import json
+import os
+import shutil
+import subprocess
+import sys
+import textwrap
+import urllib.parse
+import urllib.request
+
+PKGDIR = os.environ.get('AURMAN_PKGDIR', os.path.join(
+        os.environ.get('XDG_DATA_HOME', os.path.expanduser('~/.local')), 'aur'))
+
+
+def cmd_sync(name, no_clone=False, no_confirm=False):
+    if not no_clone:
+        repo = os.path.join(PKGDIR, name)
+        if os.path.exists(repo):
+            run('git', '-C', repo, 'pull')
+        else:
+            run('git', '-C', PKGDIR, 'clone', '-q',
+                'https://aur.archlinux.org/{}.git'.format(name))
+
+    wd = os.getcwd()
+    try:
+        os.chdir(os.path.join(PKGDIR, name))
+        proc = subprocess.run(['less', 'PKGBUILD'])
+        proc.check_returncode()
+
+        ver, latest = get_version(name)
+        if ver == latest:
+            print('\nwarning: {}-{} is up to date -- reinstalling'.format(name, ver))
+        if not no_confirm and not confirm():
+            return
+
+        proc = subprocess.run(['makepkg', '-si', '--noconfirm'])
+        proc.check_returncode()
+        clean(name)
+    finally:
+        os.chdir(wd)
+
+
+def cmd_update(upd_db=False):
+    if upd_db:
+        pass
+
+    dirs = os.listdir(PKGDIR)
+    dirs.sort()
+
+    # Get list of updates.
+    updates = []
+    for name in dirs:
+        repo = os.path.join(PKGDIR, name)
+        wd = os.getcwd()
+        try:
+            os.chdir(repo)
+            ver, latest = get_version(name)
+            if latest != ver:
+                updates.append([name, ver, latest])
+        finally:
+            os.chdir(wd)
+
+    if len(updates) == 0:
+        print('Nothing to do be done')
+        return
+
+    # Show what we're going to do and makepkg diffs
+    for name, ver, latest in updates:
+        print('{} {} -> {}'.format(name, ver, latest))
+
+    if not confirm():
+        return
+
+    proc = subprocess.run(['less'] +
+            [os.path.join(PKGDIR, p[0], 'PKGBUILD') for p in updates])
+    proc.check_returncode()
+    if not confirm():
+        return
+
+    for name, ver, latest in updates:
+        cmd_sync(name, no_clone=True, no_confirm=True)
+
+
+def cmd_search(query):
+    installed = [p.split(' ')[0] for p in run('pacman', '-Q')]
+    r = urllib.request.urlopen(
+        'https://aur.archlinux.org/rpc/?v=5&type=search&arg=' +
+        urllib.parse.quote(query))
+    data = r.read()
+    if r.getcode() != 200:
+        err('return code was {}: {}'.format(r.getcode(), data))
+
+    result = json.loads(data)
+    if result['resultcount'] == 0:
+        sys.exit(1)
+
+    result['results'].sort(key=lambda k: k['NumVotes'])
+    result['results'].reverse()
+    for r in result['results']:
+        r['Description'] = '\n'.join(['    '+l for l in textwrap.wrap(r['Description'])])
+        r['Installed'] = ' [installed]' if r['Name'] in installed else ''
+        print('{Name} {Version} {{{NumVotes}}}{Installed}\n{Description}'.format(**r))
+
+
+def cmd_foreign():
+    foreign = run('pacman', '-Qm')
+    for pkg in foreign:
+        name, ver = pkg.split(' ')
+        repo = os.path.join(PKGDIR, name)
+
+        if os.path.exists(repo):
+            continue
+
+        print('no directory for {}; cloning'.format(name))
+        try:
+            run('git', '-C', PKGDIR, 'clone', '-q',
+                'https://aur.archlinux.org/{}.git'.format(name))
+        except Exception as exc:
+            print('ERROR: {}'.format(exc))
+
+    print('{} packages in {}'.format(len(os.listdir(PKGDIR)), PKGDIR))
+
+
+# Helper functions
+##################
+
+
+# Get version as (current_version, version_in_pkgbuild)
+def get_version(name):
+    repo = os.path.join(PKGDIR, name)
+    c = run('pacman', '-Q', name)[0].split(' ')[1]
+
+    shcmd = '. {}/PKGBUILD; . /usr/share/makepkg/util/pkgbuild.sh; get_full_version'.format(repo)
+    l = run('bash', '-c', shcmd)[0]
+    return (c, l)
+
+
+def confirm():
+    s = input(':: Continue [Y/n]? ')
+    return s.lower() in ['', 'y', 'yes']
+
+
+def run(*cmd):
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc.check_returncode()
+    stdout = proc.stdout.decode()
+    if stdout[-1:] == '\n':
+        stdout = stdout[:-1]
+    return stdout.split('\n')
+
+
+def clean(name):
+    repo = os.path.join(PKGDIR, name)
+    run('git', '-C', repo, 'clean', '-df')
+
+    # Some packages have a gitignore :-(
+    if os.path.exists(os.path.join(repo, 'src')):
+        shutil.rmtree(os.path.join(repo, 'src'))
+    if os.path.exists(os.path.join(repo, 'pkg')):
+        shutil.rmtree(os.path.join(repo, 'pkg'))
+    for ext in ['tar', 'gz', 'tgz', 'xz', 'zip']:
+        for f in glob.glob('{}/*.{}'.format(repo, ext)):
+            os.remove(f)
+
+
+def err(msg):
+    print('aurman: ' + msg, file=sys.stderr)
+    usage()
+    sys.exit(1)
+
+
+def usage():
+    print('Usage: {} [ sync | search | update | foreign ]'.format(sys.argv[0]))
+    print('')
+    print('Manage AUR packages. A local "database" of AUR packages in stored in PKGDIR.')
+    print("Use the foreign command to populate it if you're using this for the first time.")
+    print('')
+    print('Commands:')
+    print('  sync [pkg]        Get or update a package.')
+    print('  search [query]    Search AUR packages; the output is sorted by vote count,')
+    print('                    which is displayed after the version in {}.')
+    print('  update [-n]       Update all packages in the package dir. Run git pull first')
+    print('                    unless -n is given.')
+    print('  foreign           Try to clone all installed foreign packages to PKGDIR.')
+    print('')
+    print('Environment:')
+    print('  AURMAN_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur')
+    print('                    (~/.local/aur for most people).')
+
+
+def start():
+    if len(sys.argv) < 2:
+        err('need a command')
+
+    if not os.path.exists(PKGDIR):
+        os.makedirs(PKGDIR)
+
+    if sys.argv[1] == 'search':
+        if len(sys.argv) < 3:
+            err('need something to search for')
+        cmd_search(sys.argv[2])
+    elif sys.argv[1] == 'sync':
+        if len(sys.argv) < 3:
+            err('need something to get')
+        cmd_sync(sys.argv[2])
+    elif sys.argv[1] == 'update':
+        cmd_update('-n' in sys.argv)
+    elif sys.argv[1] == 'foreign':
+        cmd_foreign()
+    else:
+        err('unknown command: {}'.format(sys.argv[1]))
+
+
+if __name__ == '__main__':
+    try:
+        start()
+    except subprocess.CalledProcessError as exc:
+        print('command {} failed with code {}'.format(exc.cmd, exc.returncode))
+        if exc.stderr is not None:
+            print(exc.stderr)
+        sys.exit(exc.returncode)
