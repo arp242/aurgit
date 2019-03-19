@@ -17,8 +17,8 @@ tree, or anything else.
 
 ---
 
-The only dependencies are Python 3.5 or newer, git, and makepkg. You probably
-already have them installed.
+The only dependencies are Python 3.5 or newer and git. You probably already
+have them installed.
 
 Usage info:
 
