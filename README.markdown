@@ -38,6 +38,8 @@ Usage info:
     Environment:
       AURMAN_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur
                         (~/.local/aur for most people).
+      AURMAN_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty
+                        string to not page anything.
 
 A lot of these commands are pretty simple wrappers around the basic shell
 commands; `sync` is `git {clone,pull} && makepkg -si`, `update` is a for loop

@@ -13,6 +13,12 @@ import urllib.request
 PKGDIR = os.environ.get('AURMAN_PKGDIR', os.path.join(
         os.environ.get('XDG_DATA_HOME', os.path.expanduser('~/.local')), 'aur'))
 
+PAGER = os.environ.get('AURMAN_PAGER', os.environ.get('PAGER', '(unset)'))
+if PAGER == '(unset)':  # Support AURMAN_PAGER= to not pipe anything.
+    PAGER = 'more'
+elif PAGER == '':
+    PAGER = None
+
 
 def cmd_sync(name, no_clone=False, no_confirm=False):
     if not no_clone:
@@ -26,8 +32,9 @@ def cmd_sync(name, no_clone=False, no_confirm=False):
     wd = os.getcwd()
     try:
         os.chdir(os.path.join(PKGDIR, name))
-        proc = subprocess.run(['less', 'PKGBUILD'])
-        proc.check_returncode()
+        if pager is not None:
+            proc = subprocess.run([PAGER, 'PKGBUILD'])
+            proc.check_returncode()
 
         ver, latest = get_version(name)
         if ver == latest:
@@ -73,9 +80,10 @@ def cmd_update(upd_db=False):
     if not confirm():
         return
 
-    proc = subprocess.run(['less'] +
-            [os.path.join(PKGDIR, p[0], 'PKGBUILD') for p in updates])
-    proc.check_returncode()
+    if pager is not None:
+        proc = subprocess.run([PAGER] +
+                [os.path.join(PKGDIR, p[0], 'PKGBUILD') for p in updates])
+        proc.check_returncode()
     if not confirm():
         return
 
@@ -98,11 +106,20 @@ def cmd_search(query):
 
     result['results'].sort(key=lambda k: k['NumVotes'])
     result['results'].reverse()
+
+    if PAGER is not None:
+        proc = subprocess.Popen([PAGER], stdin=subprocess.PIPE, encoding='utf-8')
+        fp = proc.stdin
+    else:
+        proc = None
+        fp = sys.stdout
     for r in result['results']:
         r['Description'] = '\n'.join(['    '+l for l in textwrap.wrap(r['Description'])])
         r['Installed'] = ' [installed]' if r['Name'] in installed else ''
-        print('{Name} {Version} {{{NumVotes}}}{Installed}\n{Description}'.format(**r))
+        fp.write('{Name} {Version} {{{NumVotes}}}{Installed}\n{Description}\n'.format(**r))
 
+    if proc is not None:
+        proc.communicate()
 
 def cmd_foreign():
     foreign = run('pacman', '-Qm')
@@ -188,6 +205,8 @@ def usage():
     print('Environment:')
     print('  AURMAN_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur')
     print('                    (~/.local/aur for most people).')
+    print("  AURMAN_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty") 
+    print('                    string to not page anything.')
 
 
 def start():
