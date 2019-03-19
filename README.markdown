@@ -18,11 +18,12 @@ tree, or anything else.
 ---
 
 The only dependencies are Python 3.5 or newer and git. You probably already
-have them installed.
+have them installed. There is an AUR package of course:
+https://aur.archlinux.org/packages/aurgit
 
 Usage info:
 
-    Usage: ./aurman [ sync | search | update | foreign ]
+    Usage: ./aurgit [ sync | search | update | foreign ]
 
     Manage AUR packages. A local "database" of AUR packages in stored in PKGDIR.
     Use the foreign command to populate it if you're using this for the first time.
@@ -36,9 +37,9 @@ Usage info:
       foreign           Try to clone all installed foreign packages to PKGDIR.
 
     Environment:
-      AURMAN_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur
+      AURGIT_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur
                         (~/.local/aur for most people).
-      AURMAN_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty
+      AURGIT_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty
                         string to not page anything.
 
 A lot of these commands are pretty simple wrappers around the basic shell

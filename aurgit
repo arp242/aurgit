@@ -10,11 +10,11 @@ import textwrap
 import urllib.parse
 import urllib.request
 
-PKGDIR = os.environ.get('AURMAN_PKGDIR', os.path.join(
+PKGDIR = os.environ.get('AURGIT_PKGDIR', os.path.join(
         os.environ.get('XDG_DATA_HOME', os.path.expanduser('~/.local')), 'aur'))
 
-PAGER = os.environ.get('AURMAN_PAGER', os.environ.get('PAGER', '(unset)'))
-if PAGER == '(unset)':  # Support AURMAN_PAGER= to not pipe anything.
+PAGER = os.environ.get('AURGIT_PAGER', os.environ.get('PAGER', '(unset)'))
+if PAGER == '(unset)':  # Support AURGIT_PAGER= to not pipe anything.
     PAGER = 'more'
 elif PAGER == '':
     PAGER = None
@@ -183,7 +183,7 @@ def clean(name):
 
 
 def err(msg):
-    print('aurman: ' + msg, file=sys.stderr)
+    print('aurgit: ' + msg, file=sys.stderr)
     usage()
     sys.exit(1)
 
@@ -203,9 +203,9 @@ def usage():
     print('  foreign           Try to clone all installed foreign packages to PKGDIR.')
     print('')
     print('Environment:')
-    print('  AURMAN_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur')
+    print('  AURGIT_PKGDIR     Dir to store git repos; default is $XDG_DATA_HOME/aur')
     print('                    (~/.local/aur for most people).')
-    print("  AURMAN_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty") 
+    print("  AURGIT_PAGER      Pager to use; defaults to ${PAGER:-less}. Set to empty") 
     print('                    string to not page anything.')
 
 
