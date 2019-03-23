@@ -32,11 +32,15 @@ def cmd_sync(name, no_clone=False, no_confirm=False):
     wd = os.getcwd()
     try:
         os.chdir(os.path.join(PKGDIR, name))
-        if pager is not None:
+        if PAGER is not None:
             proc = subprocess.run([PAGER, 'PKGBUILD'])
             proc.check_returncode()
 
-        ver, latest = get_version(name)
+        try:
+            ver, latest = get_version(name)
+        except subprocess.CalledProcessError as exc:
+            ver, latest = (1, 2)
+            pass
         if ver == latest:
             print('\nwarning: {}-{} is up to date -- reinstalling'.format(name, ver))
         if not no_confirm and not confirm():
