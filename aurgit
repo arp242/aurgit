@@ -40,7 +40,6 @@ def cmd_sync(name, no_clone=False, no_confirm=False):
             ver, latest = get_version(name)
         except subprocess.CalledProcessError as exc:
             ver, latest = (1, 2)
-            pass
         if ver == latest:
             print('\nwarning: {}-{} is up to date -- reinstalling'.format(name, ver))
         if not no_confirm and not confirm():
@@ -62,22 +61,31 @@ def cmd_update(upd_db=False):
 
     # Get list of updates.
     updates = []
+    not_installed = []
     for name in dirs:
         repo = os.path.join(PKGDIR, name)
         wd = os.getcwd()
         try:
             os.chdir(repo)
-            ver, latest = get_version(name)
+            try:
+                ver, latest = get_version(name)
+            except subprocess.CalledProcessError as exc:
+                not_installed.append(name)
             if latest != ver:
                 updates.append([name, ver, latest])
         finally:
             os.chdir(wd)
 
-    if len(updates) == 0:
+    if len(updates) + len(not_installed) == 0:
         print('Nothing to do be done')
         return
 
     # Show what we're going to do and makepkg diffs
+    if len(not_installed) > 0:
+        print('Not currently installed:')
+        for name in not_installed:
+            print('   ', name)
+        print()
     for name, ver, latest in updates:
         print('{} {} -> {}'.format(name, ver, latest))
 
@@ -242,5 +250,5 @@ if __name__ == '__main__':
     except subprocess.CalledProcessError as exc:
         print('command {} failed with code {}'.format(exc.cmd, exc.returncode))
         if exc.stderr is not None:
-            print(exc.stderr)
+            print(exc.stderr.decode().strip())
         sys.exit(exc.returncode)
