@@ -53,9 +53,6 @@ def cmd_sync(name, no_clone=False, no_confirm=False):
 
 
 def cmd_update(upd_db=False):
-    if upd_db:
-        pass
-
     dirs = os.listdir(PKGDIR)
     dirs.sort()
 
@@ -68,6 +65,8 @@ def cmd_update(upd_db=False):
         try:
             os.chdir(repo)
             try:
+                if upd_db:
+                    run('git', 'pull')
                 ver, latest = get_version(name)
             except subprocess.CalledProcessError as exc:
                 not_installed.append(name)
@@ -92,12 +91,12 @@ def cmd_update(upd_db=False):
     if not confirm():
         return
 
-    if pager is not None:
-        proc = subprocess.run([PAGER] +
-                [os.path.join(PKGDIR, p[0], 'PKGBUILD') for p in updates])
-        proc.check_returncode()
-    if not confirm():
-        return
+    # if PAGER is not None:
+    #     proc = subprocess.run([PAGER] +
+    #             [os.path.join(PKGDIR, p[0], 'PKGBUILD') for p in updates])
+    #     proc.check_returncode()
+    # if not confirm():
+    #     return
 
     for name, ver, latest in updates:
         cmd_sync(name, no_clone=True, no_confirm=True)
@@ -235,9 +234,11 @@ def start():
     elif sys.argv[1] == 'sync':
         if len(sys.argv) < 3:
             err('need something to get')
+        # TODO: support multiple packages:
+        #   aurgit sync keybase-bin shellcheck-static spotify
         cmd_sync(sys.argv[2])
     elif sys.argv[1] == 'update':
-        cmd_update('-n' in sys.argv)
+        cmd_update('-n' not in sys.argv)
     elif sys.argv[1] == 'foreign':
         cmd_foreign()
     else:

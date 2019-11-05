@@ -1,3 +1,8 @@
+Archived because I now use Void Linux instead of Arch. AFAIK it should still
+work well though.
+
+---
+
 A simple script to manage AUR packages. Yes ... another one, because it's
 exactly what the world needed!
 
